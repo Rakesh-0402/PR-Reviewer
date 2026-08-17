@@ -1,6 +1,6 @@
 import DashboardNavbar from "../components/DashboardNavbar";
 import SearchRepository from "../components/SearchRepository";
-import PRCard from "../components/PRCard";
+import PRCard from "../components/PRCard.jsx";
 import LoadingCard from "../components/LoadingCard";
 import ReviewPanel from "../components/ReviewPanel";
 import {getPullRequests, getReview, getRepository} from "../services/githubService.js";
