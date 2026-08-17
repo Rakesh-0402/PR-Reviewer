@@ -10,7 +10,7 @@ console.log(process.env.GROQ_API_KEY);
 import connectDB from "./config/db.js";
 
 const app = express();// app is your backend application
-const port = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 
 app.use(express.json()); //parse json data -> js object
 
