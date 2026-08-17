@@ -5,8 +5,6 @@ import express from "express";  // build server using express
 import cors from "cors";
 import statsRoutes from "./routes/statsRoutes.js";
 
-console.log(process.env.GROQ_API_KEY);
-
 import connectDB from "./config/db.js";
 
 const app = express();// app is your backend application
