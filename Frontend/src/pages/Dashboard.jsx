@@ -88,7 +88,8 @@ export default function Dashboard(){
 
      //fetch all open pull request
     async function fetchPullRequests() {
-        alert(`OWNER: ${owner}\nREPO: ${repo}`);
+        toast.success(`OWNER: ${owner} | REPO: ${repo}`);
+
         await fetchRepository(); // before fetching all prs fetch repository details
 
         try {
