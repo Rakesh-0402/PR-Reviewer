@@ -66,21 +66,21 @@ export default function DashboardNavbar() {
   }
 
   return (
-    <nav className="flex items-center justify-between mb-8">
+    <nav className="flex flex-wrap items-center justify-between gap-4 mb-8">
 
       {/* Logo + Dashboard */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
 
-        <div className="bg-black p-2 rounded-lg">
-          <Bot className="text-white" size={22} />
+        <div className="bg-black p-2 rounded-lg shrink-0">
+          <Bot className="text-white" size={20} />
         </div>
 
-        <div>
-          <h1 className="font-bold text-2xl text-gray-900 dark:text-white">
+        <div className="min-w-0">
+          <h1 className="font-bold text-lg sm:text-2xl text-gray-900 dark:text-white truncate">
             AI PR Reviewer
           </h1>
 
-          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+          <div className="hidden sm:flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
             <LayoutDashboard size={14} />
             <span>Dashboard</span>
           </div>
@@ -89,18 +89,20 @@ export default function DashboardNavbar() {
       </div>
 
       {/* Right Side */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         <Link
             to="/"
-            className="p-2.5 rounded-lg border
-                      border-gray-200 dark:border-gray-800
-                      bg-white dark:bg-gray-900
-                      text-gray-700 dark:text-gray-200
-                      hover:bg-gray-100 dark:hover:bg-gray-800
-                      transition"
+            className="
+              p-2 sm:p-2.5 rounded-lg border
+              border-gray-200 dark:border-gray-800
+              bg-white dark:bg-gray-900
+              text-gray-700 dark:text-gray-200
+              hover:bg-gray-100 dark:hover:bg-gray-800
+              transition
+              "
             title="Home"
           >
-        <House size={19} />
+        <House size={18} />
         </Link>
 
         {/* Profile */}
@@ -111,34 +113,35 @@ export default function DashboardNavbar() {
             <button
               onClick={() => setProfileOpen((prev) => !prev)}
               className="
-                flex items-center gap-3
-                px-3 py-2
-                rounded-xl
-                border border-gray-200 dark:border-gray-800
-                bg-white dark:bg-gray-900
-                hover:bg-gray-50 dark:hover:bg-gray-800
-                transition
+                 flex items-center gap-2
+                  px-2 sm:px-3 py-2
+                  rounded-xl
+                  border border-gray-200 dark:border-gray-800
+                  bg-white dark:bg-gray-900
+                  hover:bg-gray-50 dark:hover:bg-gray-800
+                  transition
               "
             >
               <UserCircle
-                size={34}
-                className="text-blue-600"
+                size={30}
+                className="text-blue-600 shrink-0"
               />
 
-              <div className="hidden sm:block text-left leading-tight">
-                <p className="font-semibold text-gray-900 dark:text-white">
+              <div className="hidden sm:block text-left leading-tight max-w-40">
+                <p className="font-semibold text-gray-900 dark:text-white truncate">
                   {user.name}
                 </p>
 
-                <p className="text-xs text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {user.email}
                 </p>
               </div>
 
               <ChevronDown
-                size={17}
+                size={16}
                 className={`
                   text-gray-500
+                  shrink-0
                   transition-transform
                   ${profileOpen ? "rotate-180" : ""}
                 `}
@@ -149,14 +152,14 @@ export default function DashboardNavbar() {
             {profileOpen && (
               <div
                 className="
-                  absolute right-0 mt-2
-                  w-64
-                  bg-white dark:bg-gray-900
-                  border border-gray-200 dark:border-gray-800
-                  rounded-xl
-                  shadow-xl
-                  overflow-hidden
-                  z-50
+                    absolute right-0 mt-2
+                    w-64 max-w-[calc(100vw-2rem)]
+                    bg-white dark:bg-gray-900
+                    border border-gray-200 dark:border-gray-800
+                    rounded-xl
+                    shadow-xl
+                    overflow-hidden
+                    z-50
                 "
               >
 

@@ -34,7 +34,7 @@ export default function PRToolbar({
                      bg-white dark:bg-gray-800
                      text-gray-900 dark:text-gray-100
                      placeholder-gray-400
-                     rounded-lg px-4 py-2 w-60"
+                     rounded-lg px-4 py-2 w-full sm:w-60"
         />
 
         <select
