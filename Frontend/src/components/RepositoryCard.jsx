@@ -22,10 +22,9 @@ export default function RepositoryCard({ repoData }) {
   }
 
   return (
-    <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-md p-8 transition-colors">
-
+    <div className="w-full min-w-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-md p-4 sm:p-6 md:p-8 transition-colors">
       {/* Top */}
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
 
         <div>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
@@ -41,7 +40,7 @@ export default function RepositoryCard({ repoData }) {
           href={repoData.html_url}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg transition"
+          className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-lg transition"
         >
           <ExternalLink size={18} />
           GitHub
