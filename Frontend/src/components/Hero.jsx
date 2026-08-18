@@ -2,10 +2,10 @@ import { Link } from "react-router-dom";
 
 export default function Hero() {
   return (
-    <section className="max-w-7xl mx-auto px-8 grid grid-cols-2 items-center mt-10">
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center mt-10">
 
       {/* Left Content */}
-      <div>
+      <div className ="min-w-0">
         <p className="max-w-lg text-blue-600 font-semibold mb-4">
           AI Powered Code Reviews
         </p>
@@ -53,10 +53,11 @@ export default function Hero() {
       {/* AI Review Preview */}
       <div
         className="
+          w-full min-w-0
           bg-white dark:bg-gray-900
           rounded-2xl
           shadow-xl
-          p-6
+          p-4 sm:p-6
           border border-gray-200 dark:border-gray-800
         "
       >
@@ -67,7 +68,7 @@ export default function Hero() {
 
         <div className="space-y-4">
 
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-gray-700 dark:text-gray-300">
               Bug Detection
             </span>
@@ -76,7 +77,7 @@ export default function Hero() {
             </span>
           </div>
 
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-gray-700 dark:text-gray-300">
               Performance
             </span>
@@ -85,7 +86,7 @@ export default function Hero() {
             </span>
           </div>
 
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-gray-700 dark:text-gray-300">
               Readability
             </span>
@@ -94,7 +95,7 @@ export default function Hero() {
             </span>
           </div>
 
-          <div className="flex justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-gray-700 dark:text-gray-300">
               Security
             </span>
@@ -106,7 +107,7 @@ export default function Hero() {
         </div>
 
         {/* Generate Full Review */}
-        <Link to="/login">
+        <Link to="/login" className ="block">
           <button className="w-full mt-8 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition">
             Generate Full Review
           </button>
