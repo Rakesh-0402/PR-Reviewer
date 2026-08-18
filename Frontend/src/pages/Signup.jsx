@@ -64,11 +64,11 @@ export default function Signup() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="min-h-screen flex items-center justify-center
+      className="min-h-screen flex items-center justify-center px-4 sm:px-6
                  bg-gradient-to-br from-blue-50 via-white to-purple-50
                  dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
       <div
-        className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-8 w-full max-w-md">
+        className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-6 sm:p-8 w-full max-w-md">
 
       <h1 className="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-gray-100">
         Create Account</h1>
