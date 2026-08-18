@@ -88,6 +88,7 @@ export default function Dashboard(){
 
      //fetch all open pull request
     async function fetchPullRequests() {
+        alert(`OWNER: ${owner}\nREPO: ${repo}`);
         await fetchRepository(); // before fetching all prs fetch repository details
 
         try {
