@@ -95,8 +95,10 @@ export default function Dashboard(){
             setPulls(data);//add this pr in to pulls array
         } 
         catch (err) {
+            //console.log(err);
+            //toast.error("Unable to fetch pull requests");
+            toast.error(err.message);
             console.log(err);
-            toast.error("Unable to fetch pull requests");
         }   
     };
 
