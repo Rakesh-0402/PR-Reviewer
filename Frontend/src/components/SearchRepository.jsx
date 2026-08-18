@@ -20,6 +20,7 @@ export default function SearchRepository({
 
         <input
           type="text"
+          autoComplete="off"
           placeholder="Repository Owner (e.g. facebook)"
           value={owner}
           onChange={(e) => setOwner(e.target.value)}
@@ -35,6 +36,7 @@ export default function SearchRepository({
 
         <input
           type="text"
+          autoComplete="off"
           placeholder="Repository Name (e.g. react)"
           value={repo}
           onChange={(e) => setRepo(e.target.value)}

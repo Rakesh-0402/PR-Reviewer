@@ -87,20 +87,18 @@ export default function Dashboard(){
     } , []); // useEffect does not trigger on re-rendering , run this code only once
 
      //fetch all open pull request
-    async function fetchPullRequests() {
-        toast.success(`OWNER: ${owner} | REPO: ${repo}`);
+    async function fetchPullRequests(currentOwner = owner, currentRepo = repo) {
+        toast.success(`OWNER: ${currentOwner} | REPO: ${currentRepo}`);
 
-        await fetchRepository(); // before fetching all prs fetch repository details
+        await fetchRepository(currentOwner, currentRepo); // before fetching all prs fetch repository details
 
         try {
             const data = await getPullRequests(owner, repo);
             setPulls(data);//add this pr in to pulls array
         } 
         catch (err) {
-            //console.log(err);
-            //toast.error("Unable to fetch pull requests");
-            toast.error(err.message);
             console.log(err);
+            toast.error("Unable to fetch pull requests");
         }   
     };
 
@@ -145,9 +143,9 @@ export default function Dashboard(){
         }
     }
     //fetch repository all details
-    async function fetchRepository(){
+    async function fetchRepository(currentOwner = owner, currentRepo = repo){
         try{;
-            const repository = await getRepository(owner, repo);
+            const repository = await getRepository(currentOwner, currentRepo);
             setRepoData(repository);
         }
         catch(err){
