@@ -66,7 +66,7 @@ export default function DashboardNavbar() {
   }
 
   return (
-    <nav className="flex flex-wrap items-center justify-between gap-4 mb-8">
+    <nav className="flex items-center justify-between gap-3 mb-8 w-full">
 
       {/* Logo + Dashboard */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -76,7 +76,7 @@ export default function DashboardNavbar() {
         </div>
 
         <div className="min-w-0">
-          <h1 className="font-bold text-lg sm:text-2xl text-gray-900 dark:text-white truncate">
+          <h1 className="font-bold text-lg sm:text-2xl text-gray-900 dark:text-white whitespace-nowrap">
             AI PR Reviewer
           </h1>
 
@@ -123,12 +123,12 @@ export default function DashboardNavbar() {
               "
             >
               <UserCircle
-                size={30}
+                size={32}
                 className="text-blue-600 shrink-0"
               />
 
-              <div className="hidden sm:block text-left leading-tight max-w-40">
-                <p className="font-semibold text-gray-900 dark:text-white truncate">
+              <div className="hidden sm:block text-left leading-tight">
+                <p className="font-semibold text-gray-900 dark:text-white">
                   {user.name}
                 </p>
 
@@ -141,7 +141,6 @@ export default function DashboardNavbar() {
                 size={16}
                 className={`
                   text-gray-500
-                  shrink-0
                   transition-transform
                   ${profileOpen ? "rotate-180" : ""}
                 `}
@@ -152,8 +151,9 @@ export default function DashboardNavbar() {
             {profileOpen && (
               <div
                 className="
-                    absolute right-0 mt-2
-                    w-64 max-w-[calc(100vw-2rem)]
+                    absolute right-0 mt-2 
+                    w-56 sm:w-64
+                    max-w-[calc(100vw-2rem)]
                     bg-white dark:bg-gray-900
                     border border-gray-200 dark:border-gray-800
                     rounded-xl
