@@ -48,6 +48,12 @@ export default function Profile() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-950 px-6 py-12 transition-colors">
+      <Link
+            to="/dashboard"
+            className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-6"
+          >
+            ← Back to Dashboard
+    </Link>
       <div className="max-w-3xl mx-auto">
 
         {/* Profile Card */}
