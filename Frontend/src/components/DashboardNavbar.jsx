@@ -69,14 +69,14 @@ export default function DashboardNavbar() {
     <nav className="flex items-center justify-between gap-3 mb-8 w-full">
 
       {/* Logo + Dashboard */}
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
 
         <div className="bg-black p-2 rounded-lg shrink-0">
           <Bot className="text-white" size={20} />
         </div>
 
         <div className="min-w-0">
-          <h1 className="font-bold text-lg sm:text-2xl text-gray-900 dark:text-white whitespace-nowrap">
+          <h1 className="font-bold text-base sm:text-2xl text-gray-900 dark:text-white whitespace-nowrap">
             AI PR Reviewer
           </h1>
 
