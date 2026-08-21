@@ -73,6 +73,7 @@ export default function DashboardNavbar() {
           bg-white/95 dark:bg-gray-950/95
           backdrop-blur-md
           shadow-sm 
+          flex items-center
     ">
     <div
       className="
