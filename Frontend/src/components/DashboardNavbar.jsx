@@ -66,7 +66,7 @@ export default function DashboardNavbar() {
   }
 
   return (
-    <nav className="flex items-center justify-between gap-3 mb-8 w-full sticky top-0 z-50">
+    <nav className="flex items-center justify-between gap-3 mb-8 w-full sticky top-0 z-50 bg-slate-900 py-4">
 
       {/* Logo + Dashboard */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
