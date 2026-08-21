@@ -66,19 +66,19 @@ export default function DashboardNavbar() {
   }
 
   return (
-    <nav className="
-          sticky top-0 z-50
-          w-full
-          border-b border-gray-200 dark:border-gray-800
-          bg-white dark:bg-gray-950
-          shadow-sm dark:shadow-none
-    ">
-    <div
-      className="
-          mx-auto flex w-full max-w-7xl
-          items-center justify-between
+    <div className="sticky top-0 z-50 w-full px-3 sm:px-6 pt-3">
+      <nav
+        className="
+          mx-auto w-full max-w-7xl
+          flex items-center justify-between
           px-3 sm:px-4 py-3
-    " >
+          rounded-2xl
+          border border-gray-200 dark:border-gray-800
+          bg-white/95 dark:bg-gray-950/95
+          backdrop-blur-md
+          shadow-sm
+        "
+        >
 
       {/* Logo + Dashboard */}
       <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
@@ -234,7 +234,7 @@ export default function DashboardNavbar() {
         )}
 
       </div>
-    </div>
     </nav>
+    </div>
   );
 }
