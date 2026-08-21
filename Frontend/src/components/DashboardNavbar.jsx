@@ -70,10 +70,8 @@ export default function DashboardNavbar() {
           sticky top-0 z-50
           w-full
           border-b border-gray-200 dark:border-gray-800
-          bg-white/95 dark:bg-gray-950/95
-          backdrop-blur-md
-          shadow-sm 
-          flex items-center
+          bg-white dark:bg-gray-950
+          shadow-sm dark:shadow-none
     ">
     <div
       className="
