@@ -68,17 +68,17 @@ export default function DashboardNavbar() {
   return (
     <nav className="
           sticky top-0 z-50
-          flex items-center justify-between gap-3
-          w-full
-          px-3 sm:px-4 py-3
-          border border-gray-200 dark:border-gray-800
-          bg-white/95 dark:bg-gray-950/95
+          border-b border-gray-200 dark:border-gray-800
+          bg-white/90 dark:bg-gray-950/90
           backdrop-blur-md
-          shadow-sm  
+          transition-colors  
     ">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <div className="h-20 flex items-center justify-between">
 
       {/* Logo + Dashboard */}
-      <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0 ">
 
         <div className="bg-black p-2 rounded-lg shrink-0">
           <Bot className="text-white" size={20} />
@@ -231,7 +231,8 @@ export default function DashboardNavbar() {
         )}
 
       </div>
-
+      </div>
+</div>
     </nav>
   );
 }
