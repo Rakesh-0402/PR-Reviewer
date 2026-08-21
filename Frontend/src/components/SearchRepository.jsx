@@ -6,7 +6,7 @@ export default function SearchRepository({
   fetchPullRequests,
 }) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-md p-8 mb-8 transition-colors mt-8">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-md p-8 mb-8 transition-colors ">
 
       <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
         Search GitHub Repository
