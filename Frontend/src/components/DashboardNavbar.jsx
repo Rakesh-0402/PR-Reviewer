@@ -67,7 +67,7 @@ export default function DashboardNavbar() {
 
   return (
     <nav className="
-          sticky top-4 z-50
+          sticky top-0 z-50
           flex items-center justify-between gap-3
           w-full
           mb-8
