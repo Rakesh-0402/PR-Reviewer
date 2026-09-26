@@ -16,6 +16,83 @@ const MAX_INPUT_BYTES = 20_000;
 const MAX_OUTPUT_TOKENS = 4096;
 const MAX_BATCHES = 5;
 
+//resume handling /automatic retries for reviewing other batches
+//automatic recovery from rate limits
+const MAX_RATE_LIMIT_RETRIES = 3;
+
+// Total rate-limit waiting allowance across this review.
+const MAX_REVIEW_WAIT_MS = 90_000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryDelayMs(error, retryIndex) {
+  const headers = error.headers ?? error.response?.headers;
+
+  const retryAfter =
+    typeof headers?.get === "function"
+      ? headers.get("retry-after")
+      : headers?.["retry-after"];
+
+  if (retryAfter != null) {
+    const value = String(retryAfter).trim();
+
+    // Retry-After normally contains a delay in seconds.
+    if (value !== "") {
+      const seconds = Number(value);
+
+      if (Number.isFinite(seconds) && seconds >= 0) {
+        return Math.ceil(seconds * 1000) + 1000;
+      }
+
+      // Also handle an HTTP date.
+      const timestamp = Date.parse(value);
+
+      if (Number.isFinite(timestamp)) {
+        return Math.max(0, timestamp - Date.now()) + 1000;
+      }
+    }
+  }
+
+  // Fallback when no usable Retry-After header is available.
+  return 10_000 * 2 ** retryIndex + Math.floor(Math.random() * 1000);
+}
+
+async function reviewBatchWithRetry(files, retryState, batchNumber) {
+  for (let retryIndex = 0; ; retryIndex++) {
+    try {
+      return await reviewBatch(files);
+    } catch (error) {
+      // Only retry rate-limit errors here.
+      if (error.status !== 429) {
+        throw error;
+      }
+
+      const delayMs = getRetryDelayMs(error, retryIndex);
+      const remainingWaitMs =
+        MAX_REVIEW_WAIT_MS - retryState.waitedMs;
+
+      if (
+        retryIndex >= MAX_RATE_LIMIT_RETRIES ||
+        delayMs > remainingWaitMs
+      ) {
+        // Preserve the original 429 for existing partial-review handling.
+        throw error;
+      }
+
+      console.warn("Groq rate limit: retry scheduled", {
+        batch: batchNumber,
+        retry: retryIndex + 1,
+        waitSeconds: Math.ceil(delayMs / 1000),
+      });
+
+      retryState.waitedMs += delayMs;
+      await sleep(delayMs);
+    }
+  }
+}
+
 const SYSTEM_PROMPT = `
 You are a senior software engineer reviewing a batch of PR file patches.
 
@@ -213,7 +290,7 @@ async function reviewBatch(files) {
 
 function publicFailure(error) {
   if (error.status === 429) {
-    return "AI rate limit reached.";
+    return "AI rate limit persists, automatic retry or wait limit reached.";
   }
 
   if (error.status === 401 || error.status === 403) {
@@ -239,15 +316,19 @@ export async function reviewCode(files, metadata) {
   const results = [];
   const reviewedFiles = [];
 
-  // Sequential requests reduce concurrency pressure.
+  // shared across all batches in this review
+  const retryState ={waitedMs : 0};
+
   for (let index = 0; index < batches.length; index++) {
     const batch = batches[index];
 
     try {
-      const review = await reviewBatch(batch);
+      const review = await reviewBatchWithRetry(batch, retryState, index+1);
 
       results.push(review);
       reviewedFiles.push(...batch.map((file) => file.filename));
+
+      //catch will run only if retries are exhausted
     } catch (error) {
       const reason = publicFailure(error);
 
