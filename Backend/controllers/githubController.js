@@ -32,49 +32,115 @@ export async function getPullRequests(req, res) {
 export async function getPullRequestFiles(req, res) {
   try {
     const { owner, repo, pull_number } = req.params;
-
     const prNumber = Number(pull_number);
-    const userId = req.user.id;
+    const userId = req.user?.id;
 
-    // Fetch PR files from GitHub
-    const response = await axios.get(
-      `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-        },
-      }
-    );
-
-    // Combine changed code patches
-    const patches = response.data
-      .map((file) => file.patch)
-      .filter(Boolean)
-      .join("\n\n")
-      .slice(0, 40000);
-
-    // Send code to AI
-    const review = await reviewCode(patches);
-
-    let reviewObject;
-
-    try {
-      reviewObject = JSON.parse(review);
-    } catch (err) {
-      console.error("Failed to parse AI response:", err);
-
-      return res.status(500).json({
-        message: "AI returned invalid JSON.",
+    if (!userId) {
+      return res.status(401).json({
+        message: "Please log in to review a pull request.",
       });
     }
 
-    /*
-     * Check whether this user has already reviewed
-     * this particular PR.
-     *
-     * This allows totalReviews to represent
-     * unique PRs reviewed.
-     */
+    if (
+      !owner ||
+      !repo ||
+      !Number.isSafeInteger(prNumber) ||
+      prNumber < 1
+    ) {
+      return res.status(400).json({
+        message: "Invalid repository or pull request number.",
+      });
+    }
+
+    const token = process.env.GITHUB_TOKEN?.trim();
+
+    if (!token) {
+      return res.status(503).json({
+        message: "GitHub authentication is not configured.",
+      });
+    }
+
+    const baseUrl =
+      `https://api.github.com/repos/` +
+      `${encodeURIComponent(owner)}/${encodeURIComponent(repo)}` +
+      `/pulls/${prNumber}`;
+
+    const requestOptions = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+      },
+      timeout: 20_000,
+    };
+
+    // Record the PR version associated with this review.
+    const { data: pr } = await axios.get(baseUrl, requestOptions);
+
+    const filesByName = new Map();
+    let hasNextPage = false;
+
+    // 100 files/page, capped at 30 pages.
+    for (let page = 1; page <= 30; page++) {
+      const response = await axios.get(`${baseUrl}/files`, {
+        ...requestOptions,
+        params: {
+          per_page: 100,
+          page,
+        },
+      });
+
+      if (!Array.isArray(response.data)) {
+        throw new Error("GitHub returned an invalid file list.");
+      }
+
+      for (const file of response.data) {
+        filesByName.set(file.filename, {
+          filename: file.filename,
+          previousFilename: file.previous_filename || null,
+          status: file.status,
+          additions: file.additions,
+          deletions: file.deletions,
+          patch: file.patch || null,
+        });
+      }
+
+      hasNextPage = /rel="next"/.test(response.headers.link || "");
+
+      if (!hasNextPage) break;
+    }
+
+    // Avoid combining pages fetched while the PR is changing.
+    const { data: latestPr } = await axios.get(
+      baseUrl,
+      requestOptions
+    );
+
+    if (
+      latestPr.head.sha !== pr.head.sha ||
+      latestPr.base.sha !== pr.base.sha ||
+      latestPr.changed_files !== pr.changed_files
+    ) {
+      return res.status(409).json({
+        message:
+          "The PR changed while its files were being fetched. " +
+          "Please review it again.",
+      });
+    }
+
+    const files = [...filesByName.values()];
+
+    const metadata = {
+      totalFiles: pr.changed_files,
+      fetchedFiles: files.length,
+      fetchComplete:
+        !hasNextPage && files.length === pr.changed_files,
+      headSha: pr.head.sha,
+      baseSha: pr.base.sha,
+    };
+
+    const review = await reviewCode(files, metadata);
+    const reviewObject = JSON.parse(review);
+
     const existingReview = await Review.findOne({
       userId,
       owner,
@@ -82,54 +148,61 @@ export async function getPullRequestFiles(req, res) {
       prNumber,
     });
 
-    // Save the review
-    const reviewDoc = new Review({
+    await Review.create({
       userId,
       owner,
       repo,
       prNumber,
+      title: pr.title,
       review: reviewObject,
     });
 
-    await reviewDoc.save();
-
-    /*
-     * Only increase totalReviews when this is
-     * the first review of this particular PR.
-     */
+    // Retains your existing unique-PR counting behavior.
     if (!existingReview) {
-      await User.findByIdAndUpdate(
-        userId,
-        {
-          $inc: {
-            totalReviews: 1,
-          },
-        },
-        {
-          new: true,
-        }
-      );
+      await User.findByIdAndUpdate(userId, {
+        $inc: { totalReviews: 1 },
+      });
     }
 
-    // Return AI review
     return res.status(200).json({
       review: reviewObject,
     });
+  } catch (error) {
+    const upstreamStatus = error.response?.status;
 
-  } catch (err) {
-  console.log(err.message);
+    console.error("PR review failed:", {
+      status: upstreamStatus || error.statusCode,
+      message: error.message,
+    });
 
-  if (err.message === "AI review limit reached. Please try again later.") {
-    return res.status(429).json({
-      message: err.message,
+    if (upstreamStatus === 404) {
+      return res.status(404).json({
+        message: "Repository or pull request was not found or is inaccessible.",
+      });
+    }
+
+    if (upstreamStatus === 401) {
+      return res.status(502).json({
+        message:
+          "GitHub rejected the server token. Check its validity.",
+      });
+    }
+
+    if (upstreamStatus === 403 || upstreamStatus === 429) {
+      return res.status(503).json({
+        message:
+          "GitHub denied access or an API limit was reached. " +
+          "Check the server logs and try again later.",
+      });
+    }
+
+    return res.status(error.statusCode || 500).json({
+      message: error.statusCode
+        ? error.message
+        : "Unable to generate review. Please try again.",
+      ...(error.coverage ? { coverage: error.coverage } : {}),
     });
   }
-
-  return res.status(500).json({
-    message: "Unable to generate review",
-    error: err.message,
-  });
-}
 }
 
 
