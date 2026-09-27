@@ -18,10 +18,10 @@ const MAX_BATCHES = 5;
 
 //resume handling /automatic retries for reviewing other batches
 //automatic recovery from rate limits
-const MAX_RATE_LIMIT_RETRIES = 3;
+const MAX_RATE_LIMIT_RETRIES = 3;   //only 3 retries are allowed
 
 // Total rate-limit waiting allowance across this review.
-const MAX_REVIEW_WAIT_MS = 90_000;
+const MAX_REVIEW_WAIT_MS = 90_000;//90s are allowed to generate the entire review
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

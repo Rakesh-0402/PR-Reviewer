@@ -32,11 +32,20 @@ const reviewSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       required: true,
     },
+    jobId: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "ReviewJob" 
+    },
   },
   {
     timestamps: true,
   }
 );
+// Historical reviews have no jobId and are excluded from this index.
+reviewSchema.index({ jobId: 1 }, {
+  unique: true,
+  partialFilterExpression: { jobId: { $type: "objectId" } },
+});
 
 const Review = mongoose.model("Review", reviewSchema);
 

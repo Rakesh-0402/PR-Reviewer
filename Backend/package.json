@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "worker": "node worker.js"
   },
   "keywords": [],
   "author": "",
@@ -15,11 +16,13 @@
   "dependencies": {
     "axios": "^1.19.0",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^5.81.5",
     "cors": "^2.8.6",
     "crypto": "^1.0.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "groq-sdk": "^1.5.0",
+    "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.1",
     "nodemailer": "^9.0.5"
