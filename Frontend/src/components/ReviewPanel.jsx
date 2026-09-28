@@ -34,7 +34,7 @@ export default function ReviewPanel({ review, prNumber }) {
               </h2>
 
               <p className="text-blue-100 text-sm">
-                Generated using Llama 3.3 70B
+                openai/gpt-oss-120b
               </p>
             </div>
 

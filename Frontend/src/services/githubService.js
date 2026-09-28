@@ -3,19 +3,21 @@ import axios from "axios";
 const BASE_URL = `${import.meta.env.VITE_API_URL}/api/github`;
 
 //fetch all open pull request
-export async function getPullRequests(owner, repo) {
+export async function getPullRequests(owner, repo, page = 1) {
     const response = await axios.get(
         `${BASE_URL}/pulls`,
         {
             params: {
                 owner,
                 repo,
+                page
             },
         }
     );
 
     return response.data;
 }
+
 
 export async function getReview(owner, repo, prNumber) {
     const token = localStorage.getItem("token");

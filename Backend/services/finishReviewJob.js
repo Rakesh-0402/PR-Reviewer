@@ -1,3 +1,4 @@
+import { compactState } from "./reviewCoverage.js";
 import mongoose from "mongoose";
 import ReviewJob from "../models/ReviewJob.js";
 import Review from "../models/Review.js";
@@ -27,11 +28,7 @@ export async function finishReviewJob(id, state) {
         }
       }
       // Keep results/coverage but discard large source patches after finalization.
-      const compact = structuredClone(state);
-      for (const batch of compact.batches) {
-        batch.files = batch.files.map(f => ({ filename: f.filename }));
-        batch.result = null;
-      }
+      const compact = compactState(state);
       await ReviewJob.updateOne({ _id: id }, {
         $set: { state: compact, status: state.status, nextRunAt: null, ...(reviewId ? { reviewId } : {}) },
         $unset: { activeUser: 1 },

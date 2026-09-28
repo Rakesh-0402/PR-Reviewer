@@ -1,20 +1,16 @@
+import { getCoverage } from "./reviewCoverage.js";
+import { skipPiece } from "./patchSplitter.js";
 // Pure workflow logic: no database, Redis, or API credentials required to test.
 export const TERMINAL = new Set(["completed", "partial", "failed"]);
 
 export function retryDelay(error, attempt, now = Date.now()) {
-
   const headers = error.headers ?? error.response?.headers;
-  
   const raw = typeof headers?.get === "function"
-
     ? headers.get("retry-after") : headers?.["retry-after"];
-
   if (raw != null && String(raw).trim() !== "") {
     const seconds = Number(raw);
-
     if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000 + 1000;
     const date = Date.parse(String(raw));
-
     if (Number.isFinite(date)) return Math.max(0, date - now) + 1000;
   }
   return Math.min(60_000 * 2 ** Math.min(attempt - 1, 6), 3_600_000);
@@ -29,7 +25,7 @@ export function stopRemaining(state, reason) {
   for (const batch of state.batches) {
     if (batch.status !== "completed" && batch.status !== "skipped") {
       batch.status = "skipped";
-      for (const file of batch.files) state.skipped.push({ filename: file.filename, reason });
+      for (const file of batch.files) state.skipped.push(skipPiece(file, reason));
     }
   }
   state.status = state.batches.some(b => b.status === "completed") ? "partial" : "failed";
@@ -47,6 +43,8 @@ export async function processTick(input, deps) {
     try {
       const prepared = await deps.prepare();
       state.metadata = prepared.metadata;
+      state.fileManifest = prepared.fileManifest || [];
+      state.planVersion = prepared.planVersion || 1;
       state.skipped = prepared.skipped;
       state.batches = prepared.batches.map(files => ({ files, status: "pending", attempts: 0, result: null }));
       state.prepared = true;
@@ -70,7 +68,8 @@ export async function processTick(input, deps) {
   const batch = state.batches.find(b => b.status === "pending");
   if (!batch) {
     const count = state.batches.filter(b => b.status === "completed").length;
-    state.status = !count ? "failed" : state.skipped.length || !state.metadata.fetchComplete ? "partial" : "completed";
+    const coverage = getCoverage(state);
+    state.status = !count ? "failed" : coverage.reviewedFiles.length === state.metadata.totalFiles && state.metadata.fetchComplete ? "completed" : "partial";
     state.message = count ? "Review finished" : "No batches could be reviewed";
     return { state };
   }
@@ -84,17 +83,6 @@ export async function processTick(input, deps) {
     state.message = "Batch saved; continuing review";
     return { state, delay: 1000 };
   } catch (error) {
-    const headers = error.headers ?? error.response?.headers;
-    console.error("AI batch request failed:", {
-    batch: state.batches.indexOf(batch) + 1,
-    attempt: batch.attempts + 1,
-    status: error.status ?? error.response?.status,
-    message: error.message,
-    retryAfter:
-      typeof headers?.get === "function"
-        ? headers.get("retry-after")
-        : headers?.["retry-after"],
-  });
     batch.attempts++;
     const status = error.status ?? error.response?.status;
     if (status === 401 || status === 403) {
@@ -117,7 +105,7 @@ export async function processTick(input, deps) {
     }
     const reason = status === 429 ? "Rate-limit retry allowance exhausted." : "AI batch failed after processing attempts.";
     batch.status = "skipped";
-    for (const file of batch.files) state.skipped.push({ filename: file.filename, reason });
+    for (const file of batch.files) state.skipped.push(skipPiece(file, reason));
     state.status = "queued";
     state.message = reason;
     return { state, delay: status === 429 ? 60_000 : 1000, cooldown: status === 429 };
@@ -127,27 +115,32 @@ export async function processTick(input, deps) {
 export function publicProgress(document) {
   const state = document.state;
   const completed = state.batches.filter(b => b.status === "completed");
+  const coverage = getCoverage(state);
   return {
     jobId: String(document._id), owner: document.owner, repo: document.repo,
     prNumber: document.prNumber, title: state.metadata?.title || "",
     status: document.status, message: state.message,
     totalFiles: state.metadata?.totalFiles ?? null,
-    reviewedFiles: completed.reduce((n, b) => n + b.files.length, 0),
+    reviewedFiles: coverage.reviewedFiles.length,
+    partialFiles: coverage.partialFiles.length,
+    completedParts: coverage.completedParts, totalParts: coverage.totalParts,
     completedBatches: completed.length, totalBatches: state.batches.length,
-    skippedFiles: state.skipped.length, nextRunAt: document.nextRunAt,
+    skippedFiles: coverage.skippedFiles.length, nextRunAt: document.nextRunAt,
     createdAt: document.createdAt, updatedAt: document.updatedAt,
   };
 }
 
 export function combineReview(state) {
-  const batches = state.batches.filter(b => b.status === "completed");
+  const batches = state.batches.map((b, index) => ({ ...b, index })).filter(b => b.status === "completed");
   if (!batches.length) return null;
   const results = batches.map(b => b.result);
-  const reviewedFiles = batches.flatMap(b => b.files.map(f => f.filename));
-  const coverageText = `Reviewed ${reviewedFiles.length} of ${state.metadata.totalFiles} changed files. ${state.status === "completed" ? "All supplied patches included." : "Partial review."}`;
+  const coverage = getCoverage(state);
+  const reviewedFiles = coverage.reviewedFiles;
+  const coverageText = `Fully reviewed ${reviewedFiles.length} of ${state.metadata.totalFiles} changed files; ${coverage.partialFiles.length} partially reviewed. ${coverage.completedParts}/${coverage.totalParts} supplied patch parts reviewed.`;
   const seen = new Set();
   const priorityIssues = results.flatMap(r => r.priorityIssues).filter(issue => {
-    const key = `${issue.filename}:${issue.title.trim().toLowerCase()}`;
+    // Conservative exact duplicate removal; different descriptions are preserved.
+    const key = JSON.stringify([issue.filename, issue.chunkId || null, issue.title.trim().toLowerCase(), issue.description.trim().toLowerCase()]);
     if (seen.has(key)) return false;
     seen.add(key); return true;
   }).sort((a, b) => ({ High: 0, Medium: 1, Low: 2 }[a.severity] - { High: 0, Medium: 1, Low: 2 }[b.severity]));
@@ -158,13 +151,16 @@ export function combineReview(state) {
     bugs: sum("bugs"), performance: sum("performance"), security: sum("security"), bestPractices: sum("bestPractices"),
     estimatedFixTime: results.length === 1 ? results[0].estimatedFixTime : "See batch estimates",
     priorityIssues: priorityIssues.slice(0, 3),
-    coverage: { ...state.metadata, status: state.status === "completed" ? "complete" : "partial", reviewedFiles, reviewedCount: reviewedFiles.length, skipped: state.skipped, successfulBatches: batches.length },
+    coverage: { ...state.metadata, status: state.status === "completed" ? "complete" : "partial",
+      reviewedFiles, reviewedCount: reviewedFiles.length, partialFiles: coverage.partialFiles,
+      fileCoverage: coverage.files, completedParts: coverage.completedParts, totalParts: coverage.totalParts,
+      skipped: state.skipped, successfulBatches: batches.length },
     markdown: [
       "## Review coverage", coverageText,
-      "Scope: GitHub-provided patches only. No tests were run. Independent batches can miss cross-file interactions.",
-      results.length > 1 ? "The displayed score is the lowest batch score; category counts sum batch estimates." : "",
-      state.skipped.length ? "### Files not reviewed\n" + state.skipped.map(f => `- ${JSON.stringify(f.filename)}: ${f.reason}`).join("\n") : "",
-      ...batches.map((b, i) => `## Batch ${i + 1}\n\n${b.result.markdown}`),
+      "Scope: GitHub-provided patches only. No tests were run. Separate file fragments can miss interactions and lack surrounding code. Full coverage means every supplied part was processed, not that every defect was found.",
+      results.length > 1 ? "The displayed score is the lowest batch score; category counts sum batch estimates and may contain overlapping findings." : "",
+      coverage.files.some(f => f.status !== "reviewed") ? "### Incomplete file coverage\n" + coverage.files.filter(f => f.status !== "reviewed").map(f => `- ${JSON.stringify(f.filename)}: ${f.completedParts}/${f.totalParts} parts reviewed. ${f.reasons.join(" ")}`).join("\n") : "",
+      ...batches.map(b => `## Batch ${b.index + 1}\n\n` + b.files.map(f => `- ${JSON.stringify(f.filename)} — part ${f.partIndex || 1}/${f.partCount || 1}`).join("\n") + `\n\n${b.result.markdown}`),
     ].filter(Boolean).join("\n\n"),
   } };
 }

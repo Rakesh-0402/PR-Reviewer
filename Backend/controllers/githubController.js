@@ -3,29 +3,39 @@ import { reviewCode } from "../services/groqService.js";
 import Review from "../models/Review.js";
 import User from "../models/User.js";
 
+// Replace ONLY getPullRequests in Backend/controllers/githubController.js.
+// Keep your existing axios import and other controller functions.  //pagination
 export async function getPullRequests(req, res) {
+  const { owner, repo } = req.query;
+  const page = Number(req.query.page ?? 1);
+  if (typeof owner !== "string" || typeof repo !== "string" ||
+      !/^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$/.test(owner) ||
+      !/^[a-zA-Z0-9_.-]{1,100}$/.test(repo) || [".", ".."].includes(repo) ||
+      !Number.isSafeInteger(page) || page < 1) {
+    return res.status(400).json({ message: "Enter a valid repository owner, name and page." });
+  }
   try {
-    const { owner, repo } = req.query;
-
     const response = await axios.get(
-      `https://api.github.com/repos/${owner}/${repo}/pulls`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
       {
-        headers: {
-          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-        },
+        headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN?.trim()}`, Accept: "application/vnd.github+json" },
+        params: { state: "open", per_page: 100, page, sort: "created", direction: "desc" },
+        timeout: 20_000,
       }
     );
-
-    return res.status(200).json(response.data);
-  } catch (err) {
-    console.log(err.response?.data || err.message);
-
-    return res.status(500).json({
-      message: "Unable to fetch pull requests",
-      error: err.response?.data || err.message,
-    });
+    if (!Array.isArray(response.data)) throw new Error("Invalid GitHub PR response");
+    const hasNext = /rel="next"/.test(response.headers.link || "");
+    return res.json({ pulls: response.data, page, nextPage: hasNext ? page + 1 : null });
+  } catch (error) {
+    const status = error.response?.status;
+    console.error("GitHub PR fetch failed:", { status, message: error.message });
+    if (status === 404) return res.status(404).json({ message: "Repository not found or inaccessible." });
+    if (status === 401) return res.status(502).json({ code: "GITHUB_AUTH_FAILED", message: "GitHub rejected the server token." });
+    if (status === 403 || status === 429) return res.status(status).json({ message: "GitHub denied access or an API limit was reached. Try again later." });
+    return res.status(502).json({ message: "Unable to fetch pull requests. Try again." });
   }
 }
+
 
 
 // Review a specific pull request
