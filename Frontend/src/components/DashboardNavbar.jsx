@@ -10,6 +10,8 @@ import {
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
+import { clearDashboardSession } from "../utils/dashboardSession.js";
 
 export default function DashboardNavbar() {
   const [user, setUser] = useState(null);
@@ -61,8 +63,17 @@ export default function DashboardNavbar() {
   }, []);
 
   function logout() {
+    try {
+  const token = localStorage.getItem("token");
+
+  if (token) {
+    clearDashboardSession(jwtDecode(token).id);
+  }
+  } catch {
+    // Continue logging out even if the token is invalid.
     localStorage.removeItem("token");
-    window.location.href = "/login";
+  }
+   window.location.href = "/login";
   }
 
   return (

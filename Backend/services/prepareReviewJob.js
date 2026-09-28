@@ -40,6 +40,7 @@ export async function prepareReviewJob(document) {
   }
   if (more || files.size !== pr.changed_files) reject("GitHub file retrieval was incomplete. Try again later.");
   const plan = buildBatches([...files.values()]);
+  console.log("Skipped PR files:", plan.skipped);
   return { ...plan, metadata: { title: pr.title, headSha: pr.head.sha, baseSha: pr.base.sha,
     totalFiles: pr.changed_files, fetchedFiles: files.size, fetchComplete: true,
     model: "openai/gpt-oss-120b" } };

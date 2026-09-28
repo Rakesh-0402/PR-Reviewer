@@ -4,143 +4,245 @@ import PRCard from "../components/PRCard.jsx";
 import ReviewPanel from "../components/ReviewPanel";
 import RepositoryCard from "../components/RepositoryCard";
 import PRToolbar from "../components/PRToolbar";
-import ReviewHistory from "../components/ReviewHistory";
 import { getPullRequests, getRepository } from "../services/githubService.js";
 import useReviewJob from "../hooks/useReviewJob";
 import { useEffect, useState, useRef } from "react";
 import toast from "react-hot-toast";
 import { jwtDecode } from "jwt-decode";
+import { FileText, Loader2, History, Eye, Trash2 } from "lucide-react";
+import { sameRepository, repositoryErrorMessage } from "../utils/dashboardSession.js";
 
 function currentUserId() {
   try { return jwtDecode(localStorage.getItem("token") || "").id || null; }
   catch { return null; }
 }
+const validReview = value => value && typeof value === "object" && !Array.isArray(value);
 function readHistory(userId) {
+  if (!userId) return [];
   try {
-    const value = JSON.parse(localStorage.getItem(`reviewHistory_${userId}`) || "[]");
-    return Array.isArray(value) ? value : [];
+    const rows = JSON.parse(localStorage.getItem(`reviewHistory_${userId}`) || "[]");
+    if (!Array.isArray(rows)) return [];
+    return rows.filter(r => r && Number.isInteger(r.prNumber) && validReview(r.review)).map((r, index) => ({
+      ...r, historyId: r.historyId || r.jobId || r._id ||
+        `legacy:${JSON.stringify([r.owner, r.repo, r.prNumber, r.reviewedAt, index])}`,
+    }));
   } catch { return []; }
+}
+function readSession(userId) {
+  if (!userId) return {};
+  try {
+    const data = JSON.parse(sessionStorage.getItem(`dashboardSession_v2_${userId}`) || "{}");
+    const repository = data?.repository;
+    const selected = data?.selected;
+    return {
+      repository: repository && typeof repository.owner === "string" && typeof repository.repo === "string" &&
+        repository.repoData && Array.isArray(repository.pulls) ? repository : null,
+      selected: selected && Number.isInteger(selected.prNumber) && validReview(selected.review) ? selected : null,
+      scope: data?.scope === "repository" ? "repository" : "all",
+    };
+  } catch { return {}; }
 }
 
 export default function Dashboard() {
   const userId = currentUserId();
+  // A different signed-in user gets fresh component state, never another user's cache.
+  return userId ? <UserDashboard key={userId} userId={userId} /> : (
+    <div className="p-10 text-center">Please log in to view your dashboard.</div>
+  );
+}
+
+function UserDashboard({ userId }) {
+  const [initial] = useState(() => readSession(userId));
+  const [repository, setRepository] = useState(initial.repository || null);
   const [owner, setOwner] = useState("");
   const [repo, setRepo] = useState("");
-  const [pulls, setPulls] = useState([]);
-  const [review, setReview] = useState(null);
-  const [selectedPR, setSelectedPR] = useState(null);
-  const [repoData, setRepoData] = useState(null);
+  const [selected, setSelected] = useState(initial.selected || null);
+  const [reviewHistory, setReviewHistory] = useState(() => readHistory(userId));
+  const [scope, setScope] = useState(initial.repository ? initial.scope || "repository" : "all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState("newest");
   const [filter, setFilter] = useState("all");
   const [fetching, setFetching] = useState(false);
-  const [loadedRepo, setLoadedRepo] = useState(null);
-  const [reviewHistory, setReviewHistory] = useState(() => readHistory(userId));
+  const [fetchError, setFetchError] = useState("");
+  const loadedRepoRef = useRef(repository);
+  const fetchLock = useRef(false);
+  const mounted = useRef(false);
   const resultRef = useRef(null);
-  const searchVersion = useRef(0);
+  const scrollRequested = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const { job, start, busy, starting, restoring, connectionError } = useReviewJob(userId, finished => {
-    if (finished.status === "failed") { toast.error(finished.message); return; }
-    if (!finished.review) { toast.error("Review result is unavailable."); return; }
-    setSelectedPR(finished.prNumber);
-    setReview(finished.review);
-    setReviewHistory(previous => [{
-      jobId: finished.jobId, owner: finished.owner, repo: finished.repo,
-      prNumber: finished.prNumber, title: finished.title,
-      review: finished.review, reviewedAt: finished.updatedAt,
-    }, ...previous.filter(item => item.jobId !== finished.jobId && !(
-      item.owner === finished.owner && item.repo === finished.repo && item.prNumber === finished.prNumber
+    if (finished.status === "failed") { toast.error(finished.message || "Review failed."); return; }
+    if (!validReview(finished.review)) { toast.error("Review result is unavailable."); return; }
+    const row = {
+      historyId: finished.jobId, jobId: finished.jobId,
+      owner: finished.owner, repo: finished.repo, prNumber: finished.prNumber,
+      title: finished.title, review: finished.review, reviewedAt: finished.updatedAt,
+    };
+    setReviewHistory(previous => [row, ...previous.filter(item => item.historyId !== row.historyId && !(
+      sameRepository(item, row) && item.prNumber === row.prNumber
     ))]);
-    if (finished.status === "partial") toast("Review finished with skipped files. Check coverage.");
+    if (!fetchLock.current && sameRepository(loadedRepoRef.current, row)) {
+      scrollRequested.current = true;
+      setSelected(row);
+    }
+    if (finished.status === "partial") toast("Review finished with incomplete coverage. Check the details.");
     else toast.success("Review completed");
   });
 
   useEffect(() => {
-    if (!userId) return;
     try { localStorage.setItem(`reviewHistory_${userId}`, JSON.stringify(reviewHistory)); }
-    catch { toast.error("Browser history storage is full. The completed review is still saved on the server."); }
+    catch { toast.error("Browser history could not be saved. Completed server reviews are unaffected.", { id: "history-storage" }); }
   }, [reviewHistory, userId]);
-
   useEffect(() => {
-    if (review) resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [review]);
+    try {
+      sessionStorage.setItem(`dashboardSession_v2_${userId}`, JSON.stringify({ repository, selected, scope }));
+    } catch { toast.error("Could not preserve the dashboard for refresh.", { id: "dashboard-storage" }); }
+  }, [repository, selected, scope, userId]);
+  useEffect(() => {
+    if (selected && scrollRequested.current && !fetching) {
+      scrollRequested.current = false;
+      resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selected, fetching]);
 
   async function fetchPullRequests() {
-    const version = ++searchVersion.current;
+    if (fetchLock.current) return;
     const requestedOwner = owner.trim();
     const requestedRepo = repo.trim();
-    if (!requestedOwner || !requestedRepo) { toast.error("Enter a repository owner and name."); return; }
+    // Accept owner/name fields, not pasted URLs or path segments.
+    if (!/^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,38})$/.test(requestedOwner) ||
+        !/^[a-zA-Z0-9_.-]{1,100}$/.test(requestedRepo) || [".", ".."].includes(requestedRepo)) {
+      toast.error("Enter a valid owner and repository name in their separate fields.");
+      return;
+    }
+    fetchLock.current = true;
     setFetching(true);
+    setFetchError("");
     try {
-      const [repository, data] = await Promise.all([
+      const [repoData, pulls] = await Promise.all([
         getRepository(requestedOwner, requestedRepo), getPullRequests(requestedOwner, requestedRepo),
       ]);
-      if (version !== searchVersion.current) return;
-      if (!Array.isArray(data)) throw new Error("Invalid PR list");
-      setRepoData(repository);
-      setPulls(data);
-      setLoadedRepo({ owner: requestedOwner.toLowerCase(), repo: requestedRepo.toLowerCase() });
-    } catch {
-      if (version === searchVersion.current) toast.error("Unable to fetch repository or pull requests.");
-    } finally { if (version === searchVersion.current) setFetching(false); }
+      if (!mounted.current) return;
+      if (!repoData?.full_name || !Array.isArray(pulls)) {
+        setFetchError("The backend returned an invalid repository response.");
+        toast.error("The backend returned an invalid repository response.");
+        return;
+      }
+      const next = { owner: (repoData.owner?.login || requestedOwner).toLowerCase(),
+        repo: (repoData.name || requestedRepo).toLowerCase(), repoData, pulls };
+      if (!sameRepository(loadedRepoRef.current, next) || (selected && !sameRepository(selected, next))) {
+        setSelected(null);
+      }
+      loadedRepoRef.current = next;
+      setRepository(next);
+      setOwner("");
+      setRepo("");
+      setSearch(""); setFilter("all"); setSort("newest");
+      setScope("repository");
+      if (!pulls.length) toast("Repository found, but no open pull requests were returned.");
+    } catch (error) {
+      if (!mounted.current) return;
+      const message = repositoryErrorMessage(error);
+      setFetchError(message);
+      toast.error(message);
+    } finally {
+      fetchLock.current = false;
+      if (mounted.current) setFetching(false);
+    }
   }
 
   async function reviewPR(prNumber) {
-    if (!loadedRepo || busy) return;
-    setReview(null);
-    // Use the repository that produced the cards, not potentially edited input fields.
-    await start(loadedRepo.owner, loadedRepo.repo, prNumber);
+    if (!repository || busy || fetchLock.current) return;
+    // Retain the prior result if submission fails; replace it when a result arrives.
+    await start(repository.owner, repository.repo, prNumber);
   }
-
+  const pulls = repository?.pulls || [];
   const filteredPRs = pulls.filter(pr =>
-    pr.title.toLowerCase().includes(search.toLowerCase()) && (filter === "all" || pr.state === filter)
+    String(pr.title || "").toLowerCase().includes(search.toLowerCase()) &&
+    (filter === "all" || pr.state === filter)
   ).sort((a, b) => sort === "newest" ? new Date(b.created_at) - new Date(a.created_at) : new Date(a.created_at) - new Date(b.created_at));
-
-  const historyRepo = loadedRepo || (job ? { owner: job.owner, repo: job.repo } : null);
-  const visibleHistory = historyRepo ? reviewHistory.filter(item =>
-    // Legacy rows did not store repository identity; keep them visible until replaced.
-    !item.owner || (item.owner === historyRepo.owner && item.repo === historyRepo.repo)
-  ) : reviewHistory;
-  function deleteReviewHistory(prNumber) {
-    setReviewHistory(previous => previous.filter(item => !(item.prNumber === prNumber && visibleHistory.includes(item))));
-    if (selectedPR === prNumber) { setReview(null); setSelectedPR(null); }
+  const visibleHistory = scope === "repository" && repository
+    ? reviewHistory.filter(item => sameRepository(item, repository)) : reviewHistory;
+  function viewReview(row) { scrollRequested.current = true; setSelected(row); }
+  function deleteReview(row) {
+    setReviewHistory(previous => previous.filter(item => item.historyId !== row.historyId));
+    if (selected?.historyId === row.historyId) setSelected(null);
   }
+  const reviewingPR = busy ? (sameRepository(job, repository) ? job.prNumber : -1) : null;
+  const showJob = busy || starting || restoring || connectionError || (job && sameRepository(job, repository));
+  const emptyTitle = !repository ? "No pull requests loaded" : !pulls.length ? "No pull requests found" : "No matching pull requests";
+  const emptyDescription = !repository ? "Enter a GitHub owner and repository name above. Your review history is below."
+    : !pulls.length ? "This repository has no open pull requests in the fetched results." : "Try changing your search or filter.";
 
-  const sameRepo = job && loadedRepo && job.owner === loadedRepo.owner && job.repo === loadedRepo.repo;
-  const reviewingPR = busy ? (sameRepo ? job.prNumber : -1) : null;
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-950 transition-colors">
       <DashboardNavbar />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <SearchRepository owner={owner} repo={repo} setOwner={setOwner} setRepo={setRepo} fetchPullRequests={fetchPullRequests} />
-        {fetching && <p className="my-3 text-sm text-gray-600 dark:text-gray-300" role="status">Fetching repository…</p>}
-        <RepositoryCard repoData={repoData} />
-        {(job || restoring || starting || connectionError) && (
-          <section className="my-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-900 dark:bg-gray-900" aria-live="polite">
-            <h2 className="font-semibold text-gray-900 dark:text-white">{job ? `${job.owner}/${job.repo} · PR #${job.prNumber}` : "Review status"}</h2>
-            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-              {connectionError || (restoring ? "Restoring review status…" : starting ? "Submitting review…" : job?.message)}
-            </p>
-            {job?.totalFiles != null && <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-              {job.reviewedFiles}/{job.totalFiles} files reviewed · {job.completedBatches}/{job.totalBatches} batches completed
-              {job.skippedFiles > 0 ? ` · ${job.skippedFiles} files skipped` : ""}
-            </p>}
-            {job?.status === "waiting" && job.nextRunAt && <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Next attempt no earlier than {new Date(job.nextRunAt).toLocaleTimeString()}.</p>}
-            {busy && job && <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">You can leave and return. Progress is saved on the server.</p>}
-          </section>
-        )}
-        <PRToolbar pulls={pulls} search={search} setSearch={setSearch} sort={sort} setSort={setSort} filter={filter} setFilter={setFilter} />
-        <div className="space-y-5">
-          {filteredPRs.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-md p-12 text-center">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{loadedRepo ? "No matching pull requests" : "Choose a repository"}</h2>
-              <p className="text-gray-500 dark:text-gray-400 mt-3">{loadedRepo ? "Try changing your search or filter." : "Enter its owner and name to get started."}</p>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <fieldset disabled={fetching} className="m-0 min-w-0 border-0 p-0 disabled:opacity-70">
+          <SearchRepository owner={owner} repo={repo} setOwner={setOwner} setRepo={setRepo} fetchPullRequests={fetchPullRequests} />
+        </fieldset>
+        {fetchError && <p role="alert" className="my-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+          {fetchError}{repository ? " Previously loaded results are shown below." : ""}
+        </p>}
+        {showJob && <section className="my-6 rounded-2xl border border-blue-200 bg-blue-50 p-5 dark:border-blue-900 dark:bg-gray-900" aria-live="polite">
+          <h2 className="font-semibold text-gray-900 dark:text-white">{job ? `${job.owner}/${job.repo} · PR #${job.prNumber}` : "Review status"}</h2>
+          <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">{connectionError || (restoring ? "Restoring review status…" : starting ? "Submitting review…" : job?.message)}</p>
+          {job?.totalFiles != null && <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            {job.reviewedFiles}/{job.totalFiles} files reviewed · {job.completedBatches}/{job.totalBatches} batches completed
+            {job.skippedFiles > 0 ? ` · ${job.skippedFiles} files skipped` : ""}
+          </p>}
+          {job?.status === "waiting" && job.nextRunAt && <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Next attempt no earlier than {new Date(job.nextRunAt).toLocaleString()}.</p>}
+          {busy && job && <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Saved progress is retained when you leave. Processing requires a running worker.</p>}
+        </section>}
+        <section aria-busy={fetching} aria-label="Repository pull requests" className="my-6">
+          {fetching ? <div role="status" className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <Loader2 size={40} className="animate-spin motion-reduce:animate-none text-blue-600" aria-hidden="true" />
+            <h2 className="mt-4 text-xl font-semibold text-gray-900 dark:text-white">Fetching repository…</h2>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading repository details and pull requests.</p>
+          </div> : <>
+            <RepositoryCard repoData={repository?.repoData || null} />
+            {repository && <PRToolbar pulls={pulls} search={search} setSearch={setSearch} sort={sort} setSort={setSort} filter={filter} setFilter={setFilter} />}
+            <div className="space-y-5">
+              {!filteredPRs.length ? <div className="rounded-2xl border border-gray-200 bg-white p-10 sm:p-12 text-center shadow-sm dark:border-gray-800 dark:bg-gray-900">
+                <FileText size={52} className="mx-auto mb-4 text-yellow-500" aria-hidden="true" />
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{emptyTitle}</h2>
+                <p className="mt-3 text-gray-500 dark:text-gray-400">{emptyDescription}</p>
+              </div> : filteredPRs.map(pr => <PRCard key={pr.id} pr={pr} reviewingPR={reviewingPR} reviewPR={reviewPR} />)}
             </div>
-          ) : filteredPRs.map(pr => <PRCard key={pr.id} pr={pr} reviewingPR={reviewingPR} reviewPR={reviewPR} />)}
-        </div>
-        <ReviewHistory reviewHistory={visibleHistory} setReview={setReview} setSelectedPR={setSelectedPR} deleteReviewHistory={deleteReviewHistory} />
-        <div ref={resultRef} className="scroll-mt-24"><ReviewPanel review={review} prNumber={selectedPR} /></div>
-      </div>
+          </>}
+        </section>
+        <section className="my-8 rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900" aria-label="Review history">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white"><History size={22} aria-hidden="true" />Review history</h2>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter review history">
+              {[['all', 'All reviews'], ['repository', 'Current repository']].map(([value, label]) => <button key={value} type="button" disabled={value === 'repository' && !repository} aria-pressed={scope === value}
+                onClick={() => setScope(value)} className={`rounded-lg px-3 py-2 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-40 ${scope === value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}>{label}</button>)}
+            </div>
+          </div>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">{scope === 'repository' && repository ? `Reviews for ${repository.owner}/${repository.repo}` : 'Reviews across all your repositories'} · {visibleHistory.length}</p>
+          {!visibleHistory.length ? <p className="py-8 text-center text-gray-500 dark:text-gray-400">No saved reviews in this view yet.</p> : <ul className="mt-4 divide-y divide-gray-200 dark:divide-gray-800">
+            {visibleHistory.map(row => <li key={row.historyId} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="break-words font-semibold text-gray-900 dark:text-white">{row.owner && row.repo ? `${row.owner}/${row.repo}` : 'Repository unavailable (older review)'} · PR #{row.prNumber}</p>
+                <p className="break-words text-sm text-gray-600 dark:text-gray-300">{row.title || 'Pull request review'}</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{row.reviewedAt ? new Date(row.reviewedAt).toLocaleString() : 'Date unavailable'}</p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button type="button" disabled={fetching} onClick={() => viewReview(row)} className="flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50"><Eye size={16} aria-hidden="true" />View review</button>
+                <button type="button" onClick={() => deleteReview(row)} aria-label={`Remove ${row.owner || ''}/${row.repo || ''} PR ${row.prNumber} from browser history`} title="Remove from this browser's history" className="rounded-lg border border-gray-200 p-2 text-red-600 hover:bg-red-50 dark:border-gray-700 dark:hover:bg-gray-800"><Trash2 size={18} aria-hidden="true" /></button>
+              </div>
+            </li>)}
+          </ul>}
+        </section>
+        {!fetching && selected && <section ref={resultRef} className="scroll-mt-24" aria-label="Selected AI review">
+          <p className="mb-3 break-words text-sm font-semibold text-gray-700 dark:text-gray-300">Viewing: {selected.owner && selected.repo ? `${selected.owner}/${selected.repo}` : 'Older saved review'} · PR #{selected.prNumber}</p>
+          <ReviewPanel review={selected.review} prNumber={selected.prNumber} />
+        </section>}
+      </main>
     </div>
   );
 }

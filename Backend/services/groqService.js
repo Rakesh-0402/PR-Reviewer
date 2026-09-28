@@ -14,7 +14,7 @@ const MODEL = "openai/gpt-oss-120b";
 // Application limits: control request size, latency, and cost.
 const MAX_INPUT_BYTES = 20_000;
 const MAX_OUTPUT_TOKENS = 4096;
-const MAX_BATCHES = 5;
+const MAX_BATCHES = 40;
 
 //resume handling /automatic retries for reviewing other batches
 //automatic recovery from rate limits
@@ -155,7 +155,7 @@ function fitsBatch(files) {
   );
 }
 
-function buildBatches(files) {
+export function buildBatches(files) {
   const batches = [];
   const skipped = [];
   let current = [];
@@ -260,7 +260,7 @@ function validateReview(content, files) {
   return review;
 }
 
-async function reviewBatch(files) {
+export async function reviewBatch(files) {
   const completion = await groq.chat.completions.create({
     model: MODEL,
     messages: [

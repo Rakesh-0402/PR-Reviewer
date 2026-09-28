@@ -2,13 +2,19 @@
 export const TERMINAL = new Set(["completed", "partial", "failed"]);
 
 export function retryDelay(error, attempt, now = Date.now()) {
+
   const headers = error.headers ?? error.response?.headers;
+  
   const raw = typeof headers?.get === "function"
+
     ? headers.get("retry-after") : headers?.["retry-after"];
+
   if (raw != null && String(raw).trim() !== "") {
     const seconds = Number(raw);
+
     if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000 + 1000;
     const date = Date.parse(String(raw));
+
     if (Number.isFinite(date)) return Math.max(0, date - now) + 1000;
   }
   return Math.min(60_000 * 2 ** Math.min(attempt - 1, 6), 3_600_000);
@@ -78,6 +84,17 @@ export async function processTick(input, deps) {
     state.message = "Batch saved; continuing review";
     return { state, delay: 1000 };
   } catch (error) {
+    const headers = error.headers ?? error.response?.headers;
+    console.error("AI batch request failed:", {
+    batch: state.batches.indexOf(batch) + 1,
+    attempt: batch.attempts + 1,
+    status: error.status ?? error.response?.status,
+    message: error.message,
+    retryAfter:
+      typeof headers?.get === "function"
+        ? headers.get("retry-after")
+        : headers?.["retry-after"],
+  });
     batch.attempts++;
     const status = error.status ?? error.response?.status;
     if (status === 401 || status === 403) {
