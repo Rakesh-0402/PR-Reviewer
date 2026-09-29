@@ -64,16 +64,19 @@ export default function DashboardNavbar() {
 
   function logout() {
     try {
-  const token = localStorage.getItem("token");
+      const token = localStorage.getItem("token");
 
-  if (token) {
-    clearDashboardSession(jwtDecode(token).id);
-  }
-  } catch {
-    // Continue logging out even if the token is invalid.
-    localStorage.removeItem("token");
-  }
-   window.location.href = "/login";
+      if (token) {
+        clearDashboardSession(jwtDecode(token).id);
+      }
+    } catch {
+    // Invalid token or unavailable dashboard storage
+    }
+    finally {
+      localStorage.removeItem("token");
+      window.dispatchEvent(new Event("auth-changed"));
+      window.location.href = "/login";
+    }
   }
 
   return (

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Menu, X, Sun, Moon } from "lucide-react";
 import { Link } from "react-router-dom";
+import { jwtDecode } from "jwt-decode";
 import useTheme from "../hooks/useTheme";
 
 const navLinks = [
@@ -10,9 +11,26 @@ const navLinks = [
   { name: "About", id: "about" },
 ];
 
+function hasActiveSession() {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) return false;
+
+    const decoded = jwtDecode(token);
+
+    return Boolean(
+      decoded.id &&
+      typeof decoded.exp === "number" &&
+      decoded.exp * 1000 > Date.now()
+    );
+  } catch {
+    return false;
+  }
+}
 export default function LandingNavbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const isLoggedIn = hasActiveSession();
 
   function closeMenu() {
     setMenuOpen(false);
@@ -86,35 +104,34 @@ export default function LandingNavbar() {
             </button>
 
             {/* Login */}
-            <Link to="/login">
-              <button
-                className="
-                  px-4 py-2 rounded-lg
-                  text-gray-700 dark:text-gray-200
-                  hover:bg-gray-100 dark:hover:bg-gray-800
-                  transition
-                  whitespace-nowrap
-                "
+            {isLoggedIn ? (
+              <Link
+                to="/dashboard"
+                onClick={closeMenu}
+                className="rounded-lg bg-blue-600 px-5 py-2.5 text-white
+                          hover:bg-blue-700 transition whitespace-nowrap"
               >
-                Login
-              </button>
-            </Link>
+                Go to dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="rounded-lg px-4 py-2 text-gray-700 dark:text-gray-200
+                            hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                >
+                  Login
+                </Link>
 
-            {/* Sign Up */}
-            <Link to="/signup">
-              <button
-                className="
-                  bg-blue-600 hover:bg-blue-700
-                  text-white
-                  px-5 py-2.5
-                  rounded-lg
-                  transition
-                  whitespace-nowrap
-                "
-              >
-                Sign Up
-              </button>
-            </Link>
+                <Link
+                  to="/signup"
+                  className="rounded-lg bg-blue-600 px-5 py-2.5 text-white
+                            hover:bg-blue-700 transition whitespace-nowrap"
+                >
+                  Sign Up
+                </Link>
+              </>
+            )}
 
           </div>
 
@@ -190,35 +207,37 @@ export default function LandingNavbar() {
 
               <div className="border-t border-gray-200 dark:border-gray-800 my-2" />
 
-              <Link to="/login" onClick={closeMenu}>
-                <button
-                  className="
-                    w-full text-left
-                    px-3 py-3 rounded-lg
-                    text-gray-700 dark:text-gray-300
-                    hover:bg-gray-100 dark:hover:bg-gray-900
-                    transition
-                  "
+              {isLoggedIn ? (
+                <Link
+                  to="/dashboard"
+                  onClick={closeMenu}
+                  className="block w-full rounded-lg bg-blue-600 px-4 py-3
+                            text-center text-white hover:bg-blue-700 transition"
                 >
-                  Login
-                </button>
-              </Link>
+                  Go to dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    onClick={closeMenu}
+                    className="block rounded-lg px-3 py-3 text-gray-700
+                              dark:text-gray-300 hover:bg-gray-100
+                              dark:hover:bg-gray-900 transition"
+                  >
+                    Login
+                  </Link>
 
-              <Link to="/signup" onClick={closeMenu}>
-                <button
-                  className="
-                    w-full
-                    bg-blue-600 hover:bg-blue-700
-                    text-white
-                    px-4 py-3
-                    rounded-lg
-                    transition
-                  "
-                >
-                  Sign Up
-                </button>
-              </Link>
-
+                  <Link
+                    to="/signup"
+                    onClick={closeMenu}
+                    className="block rounded-lg bg-blue-600 px-4 py-3
+                              text-center text-white hover:bg-blue-700 transition"
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         )}

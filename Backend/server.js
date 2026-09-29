@@ -12,6 +12,10 @@ import githubRoutes from "./routes/githubRoutes.js";
 import ReviewJob from "./models/ReviewJob.js";
 import Review from "./models/Review.js";
 import { reviewQueue, queueConnection } from "./config/reviewQueue.js";
+import githubAuthRoutes from "./routes/githubAuthRoutes.js";
+import AuthLinkLimit from "./models/AuthLinkLimit.js";
+import OAuthAttempt from "./models/OAuthAttempt.js";
+import User from "./models/User.js";
 
 const app = express();// app is your backend application
 const PORT = process.env.PORT || 3000;
@@ -26,9 +30,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api" , dashboardRoutes);
 app.use("/api/github", githubRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/auth/github", githubAuthRoutes);
 
 await connectDB();    //connect mongodb with backend
-await Promise.all([ReviewJob.init(), Review.init()]);
+await Promise.all([ReviewJob.init(), Review.init(), User.init(),
+  OAuthAttempt.init() , AuthLinkLimit.init(),
+]);
 
 app.get("/", (req, res) => {
     res.send("Backend is running 🚀");
@@ -40,7 +47,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({ message: "Server error. Please try again." });
 });
 
-app.listen(PORT , (req, res) =>{
+const server = app.listen(PORT , (req, res) =>{
     console.log(`Server is listening on port ${PORT}`);
 })
 

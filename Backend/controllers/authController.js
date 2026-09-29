@@ -162,29 +162,27 @@ export async function resetPassword(req, res) {
     }
 }
 export async function getMe(req, res) {
-    try {
-        const user = await User.findById(req.user.id).select("-password");
-
-        if (!user) {
-            return res.status(404).json({
-                message: "User not found",
-            });
-        }
-
-        return res.status(200).json({
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                totalReviews: user.totalReviews,
-                createdAt: user.createdAt,
-            },
-        });
-    } catch (err) {
-        console.error("Get profile error:", err);
-
-        return res.status(500).json({
-            message: "Unable to fetch profile",
-        });
-    }
+  try {
+    const user = await User.findById(req.user.id)
+      .select("name email totalReviews createdAt githubId githubUsername password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    return res.json({ user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      totalReviews: user.totalReviews,
+      createdAt: user.createdAt,
+      githubConnected: Boolean(user.githubId),
+      githubUsername: user.githubUsername || null,
+      hasPassword: Boolean(user.password),
+    } });
+    
+  } catch (error) {
+    console.error("Get profile error:", {
+  name: error.name,
+  message: error.message,
+});
+    
+    return res.status(500).json({ message: "Unable to fetch profile" });
+  }
 }

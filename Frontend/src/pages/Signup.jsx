@@ -4,6 +4,7 @@ import { signupSchema } from "../schemas/signupSchema";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { Eye, EyeOff } from "lucide-react";
+import GithubLoginButton from "../components/GithubLoginButton";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -211,6 +212,11 @@ export default function Signup() {
         >
           Register
         </button>
+        <p className="mt-4 text-center text-sm text-gray-500">
+          or
+        </p>
+
+        <GithubLoginButton/>
 
         {/* Login */}
         <p className="text-center mt-6 text-gray-600 dark:text-gray-400">
