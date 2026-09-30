@@ -8,14 +8,31 @@ function reject(message) {
   throw error;
 }
 
-export async function prepareReviewJob(document) {
-  if (!process.env.GITHUB_TOKEN?.trim()) reject("GitHub token is not configured.");
+export async function prepareReviewJob(
+  document, 
+  token = process.env.GITHUB_TOKEN?.trim()
+) {
+  if (!token) reject("GitHub authentication is not configured.");
   const url = `https://api.github.com/repos/${encodeURIComponent(document.owner)}/${encodeURIComponent(document.repo)}/pulls/${document.prNumber}`;
+
   const options = {
-    headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}`, Accept: "application/vnd.github+json" },
+    headers: { 
+      Authorization: `Bearer ${token}`, 
+      Accept: "application/vnd.github+json" 
+    },
     timeout: 20_000, maxContentLength: 3_000_000,
   };
   const { data: pr } = await axios.get(url, options);
+  // Automatic jobs must review the version that triggered the webhook.
+  if (
+    document.headSha &&
+    (
+      pr.head.sha !== document.headSha ||
+      pr.base.sha !== document.baseSha
+    )
+  ) {
+    reject("This PR version is outdated.");
+  }
   // Explicit admission limits keep a single MongoDB job document bounded.
   if (pr.changed_files > 300) reject("This version supports PRs with up to 300 changed files.");
   const files = new Map();

@@ -9,9 +9,13 @@ import { processTick, TERMINAL, stopRemaining } from "./services/reviewJobCore.j
 import { prepareReviewJob } from "./services/prepareReviewJob.js";
 import { reviewBatch } from "./services/groqService.js";
 import { finishReviewJob } from "./services/finishReviewJob.js";
-
+import AutomaticReview from "./models/AutomaticReview.js";
+import {
+  processAutomaticReview,
+  reconcileAutomaticReviews,
+} from "./services/automaticReviewWorker.js";
 await connectDB();
-await Promise.all([ReviewJob.init(), Review.init()]);
+await Promise.all([ReviewJob.init(), Review.init(), AutomaticReview.init()]);
 await reviewQueue.setGlobalConcurrency(1);
 const workerConnection = redisConnection(true);
 const COOLDOWN_KEY = `${QUEUE_NAME}:groq-cooldown`;
@@ -22,6 +26,11 @@ async function delayJob(job, token, timestamp) {
 }
 
 const worker = new Worker(QUEUE_NAME, async (queueJob, token) => {
+  //automatic pr review
+    if (queueJob.name === "automatic-review") {
+    return processAutomaticReview(queueJob, token);
+  }
+  //manual pr review
   const document = await ReviewJob.findById(queueJob.data.reviewJobId);
   if (!document || !document.activeUser) return;
   const now = Date.now();
@@ -65,6 +74,7 @@ async function reconcile() {
   if (reconciling) return;
   reconciling = true;
   try {
+    await reconcileAutomaticReviews();
     // Recreate absent queue entries from MongoDB after an enqueue failure or Redis data loss.
     for await (const document of ReviewJob.find({ activeUser: { $exists: true } }).cursor()) {
       let queued = await reviewQueue.getJob(String(document._id));

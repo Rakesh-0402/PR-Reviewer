@@ -16,9 +16,17 @@ import githubAuthRoutes from "./routes/githubAuthRoutes.js";
 import AuthLinkLimit from "./models/AuthLinkLimit.js";
 import OAuthAttempt from "./models/OAuthAttempt.js";
 import User from "./models/User.js";
+import AutomaticReview from "./models/AutomaticReview.js";
+import { githubWebhook } from "./controllers/githubWebhookController.js";
 
 const app = express();// app is your backend application
 const PORT = process.env.PORT || 3000;
+
+app.post(
+  "/api/webhooks/github",
+  express.raw({ type: "application/json", limit: "2mb" }),
+  githubWebhook
+);
 
 app.use(express.json({limit : "100kb"})); //parse json data -> js object
 
@@ -34,7 +42,7 @@ app.use("/api/auth/github", githubAuthRoutes);
 
 await connectDB();    //connect mongodb with backend
 await Promise.all([ReviewJob.init(), Review.init(), User.init(),
-  OAuthAttempt.init() , AuthLinkLimit.init(),
+  OAuthAttempt.init() , AuthLinkLimit.init(), AutomaticReview.init(),
 ]);
 
 app.get("/", (req, res) => {
