@@ -1,6 +1,7 @@
 import "dotenv/config";
 import Groq from "groq-sdk";
 import { buildPatchBatches } from "./patchSplitter.js";
+import {reserveAiBudget,settleAiBudget} from "./aiBudgetService.js";
 
 const MAX_INPUT_BYTES = 20_000;
 const MAX_BATCHES = 40;
@@ -19,7 +20,10 @@ Rules:
 - In markdown identify the filename and part number for findings; do not repeat the entire patch.
 - Never claim that reviewing one part completes the entire file.`;
 
-function input(files) { return JSON.stringify({ files }); }
+function input(files) { 
+  return JSON.stringify({ files }); 
+}
+
 function fitsBatch(files) {
   // UTF-8 bytes are a conservative size guard, NOT an exact tokenizer or quota predictor.
   return Buffer.byteLength(SYSTEM) + Buffer.byteLength(input(files)) + 1024 <= MAX_INPUT_BYTES;
@@ -29,22 +33,77 @@ export function buildBatches(files) {
 }
 
 let groq;
-export async function reviewBatch(files) {
+export async function reviewBatch(files, budgetScope) {
   // Older persisted jobs have no chunk metadata. Accept them without replanning.
+
   const parts = files.map((f, index) => ({ ...f, chunkId: f.chunkId || `legacy-${index}`,
     partIndex: f.partIndex || 1, partCount: f.partCount || 1 }));
+
   if (!parts.length || !fitsBatch(parts)) {
     throw Object.assign(new Error("Batch exceeds the configured input budget."), { status: 400 });
   }
-  groq ||= new Groq({ apiKey: process.env.GROQ_API_KEY, maxRetries: 0, timeout: 60_000 });
-  // Let original API errors reach the worker, preserving status and Retry-After.
-  const completion = await groq.chat.completions.create({
+  groq ||= new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+  maxRetries: 0,
+  timeout: 60_000,
+});
+
+const messages = [
+  { role: "system", content: SYSTEM },
+  { role: "user", content: input(parts) },
+];
+
+const maxCompletionTokens = 4096;
+
+// Deliberately conservative estimate, not an exact model tokenizer.
+const reservedTokens =
+  Buffer.byteLength(SYSTEM, "utf8") +
+  Buffer.byteLength(input(parts), "utf8") +
+  1024 +
+  maxCompletionTokens;
+
+const reservationId = await reserveAiBudget({
+  scope: budgetScope,
+  tokens: reservedTokens,
+});
+
+let completion;
+
+try {
+  completion = await groq.chat.completions.create({
     model: "openai/gpt-oss-120b",
-    messages: [{ role: "system", content: SYSTEM }, { role: "user", content: input(parts) }],
-    temperature: 0.2, max_completion_tokens: 4096,
+    messages,
+    temperature: 0.2,
+    max_completion_tokens: maxCompletionTokens,
     response_format: { type: "json_object" },
   });
+} catch (error) {
+  // A timeout does not prove the provider performed no work.
+  // Keep this request's reservation and preserve the original API error.
+  console.warn("AI request failed; budget reservation retained.", {
+    reservationId,
+    status: error.status,
+    message:error.message,
+  });
+  throw error;
+}
+
+// Account for usage BEFORE parsing or validating the AI output.
+try {
+  await settleAiBudget(
+    reservationId,
+    completion.usage?.total_tokens
+  );
+} catch (error) {
+  // Keep the existing reservation. Do not discard a usable response
+  // and spend more tokens merely because accounting settlement failed.
+  console.error("AI usage settlement failed; reservation retained.", {
+    reservationId,
+    type: error.name,
+  });
+}
   const choice = completion.choices?.[0];
+
   if (choice?.finish_reason !== "stop") throw new Error("AI response did not finish normally.");
   const review = JSON.parse(choice.message?.content || "null")?.review;
   if (!review || !Number.isFinite(review.overallScore) || review.overallScore < 0 || review.overallScore > 10 ||

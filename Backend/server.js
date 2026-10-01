@@ -18,7 +18,8 @@ import OAuthAttempt from "./models/OAuthAttempt.js";
 import User from "./models/User.js";
 import AutomaticReview from "./models/AutomaticReview.js";
 import { githubWebhook } from "./controllers/githubWebhookController.js";
-
+import GithubInstallation from "./models/GithubInstallation.js"
+import githubInstallationRoutes from "./routes/githubInstallationRoutes.js";
 const app = express();// app is your backend application
 const PORT = process.env.PORT || 3000;
 
@@ -39,10 +40,12 @@ app.use("/api" , dashboardRoutes);
 app.use("/api/github", githubRoutes);
 app.use("/api/stats", statsRoutes);
 app.use("/api/auth/github", githubAuthRoutes);
+app.use("/api/github/installation", githubInstallationRoutes);
 
 await connectDB();    //connect mongodb with backend
 await Promise.all([ReviewJob.init(), Review.init(), User.init(),
   OAuthAttempt.init() , AuthLinkLimit.init(), AutomaticReview.init(),
+  GithubInstallation.init(),
 ]);
 
 app.get("/", (req, res) => {

@@ -3,6 +3,8 @@ import axios from "axios";
 import { Bot, GitPullRequest, CalendarDays } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import ConnectGithub from "../components/ConnectGithub";
+import AutomaticReviews from "../components/AutomaticReviews";
+
 export default function Profile() {
   const [user, setUser] = useState(null);
   const [error, setError] = useState("");
@@ -55,6 +57,7 @@ export default function Profile() {
             <p className="text-lg font-semibold text-gray-900 dark:text-white">Joined</p><p className="mt-1 text-gray-500 dark:text-gray-400">{joinedDate}</p></div>
         </div>
         <ConnectGithub user={user} />
+        <AutomaticReviews user ={user} />
       </div>
     </div>
   </main>;

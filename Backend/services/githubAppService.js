@@ -71,3 +71,17 @@ export function githubRequest(token, method, path, data, params) {
     maxContentLength: 3_000_000,
   });
 }
+export async function getPersonalInstallation(username) {
+  const { data } = await axios.get(
+    `https://api.github.com/users/${encodeURIComponent(username)}/installation`,
+    {
+      headers: {
+        Authorization: `Bearer ${appJWT()}`,
+        Accept: "application/vnd.github+json",
+      },
+      timeout: 20_000,
+    }
+  );
+
+  return data;
+}

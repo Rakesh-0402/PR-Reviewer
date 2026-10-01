@@ -14,7 +14,9 @@ import {
   processAutomaticReview,
   reconcileAutomaticReviews,
 } from "./services/automaticReviewWorker.js";
+import { initAiBudgets } from "./services/aiBudgetService.js";
 await connectDB();
+await initAiBudgets();
 await Promise.all([ReviewJob.init(), Review.init(), AutomaticReview.init()]);
 await reviewQueue.setGlobalConcurrency(1);
 const workerConnection = redisConnection(true);
@@ -46,10 +48,16 @@ const worker = new Worker(QUEUE_NAME, async (queueJob, token) => {
   await ReviewJob.updateOne({ _id: document._id }, { $set: {
     status: "running", "state.message": document.state.prepared ? "Analyzing the next batch" : "Fetching changed files",
   } });
-  const outcome = await processTick(document.state, {
-    now, expiresAt: document.expiresAt.getTime(),
-    prepare: () => prepareReviewJob(document), reviewBatch,
-  });
+ const outcome = await processTick(document.state, {
+  now,
+  expiresAt: document.expiresAt.getTime(),
+  prepare: () => prepareReviewJob(document),
+  reviewBatch: files =>
+    reviewBatch(files, {
+      type: "user",
+      id: String(document.userId),
+    }),
+});
   if (TERMINAL.has(outcome.state.status)) {
     await finishReviewJob(document._id, outcome.state);
     return;

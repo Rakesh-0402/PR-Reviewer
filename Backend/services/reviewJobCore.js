@@ -83,6 +83,45 @@ export async function processTick(input, deps) {
     state.message = "Batch saved; continuing review";
     return { state, delay: 1000 };
   } catch (error) {
+    if (
+  error.code === "AI_BUDGET_WAIT" ||
+  error.code === "AI_BUDGET_UNAVAILABLE"
+) {
+  const currentTime = deps.now ?? Date.now();
+
+  if (currentTime >= deps.expiresAt) {
+    return {
+      state: stopRemaining(
+        state,
+        "Review processing window expired while waiting for budget."
+      ),
+    };
+  }
+
+  const requestedRetry = Number.isFinite(error.retryAt)
+    ? error.retryAt
+    : currentTime + 60_000;
+
+  const nextAttempt = Math.min(
+    Math.max(currentTime + 1000, requestedRetry),
+    deps.expiresAt
+  );
+
+  state.status = "waiting";
+  state.message = error.message;
+
+  return {
+    state,
+    delay: Math.max(1, nextAttempt - currentTime),
+    cooldown: false,
+  };
+}
+
+if (error.code === "AI_BUDGET_CONFIG") {
+  return {
+    state: stopRemaining(state, error.message),
+  };
+}
     batch.attempts++;
     const status = error.status ?? error.response?.status;
     if (status === 401 || status === 403) {

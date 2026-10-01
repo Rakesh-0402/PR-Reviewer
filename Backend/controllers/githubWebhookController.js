@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import AutomaticReview from "../models/AutomaticReview.js";
 import { initialState } from "../services/reviewJobCore.js";
+import GithubInstallation from "../models/GithubInstallation.js"
 
 const ACTIONS = new Set([
   "opened",
@@ -66,7 +67,11 @@ export async function githubWebhook(req, res) {
       ["deleted", "suspend"].includes(payload.action) &&
       Number.isSafeInteger(installationId)
     ) {
-      await AutomaticReview.updateMany(
+        await GithubInstallation.updateOne(
+          { installationId },
+          { $set: { enabled: false } }
+        );
+        await AutomaticReview.updateMany(
         {
           installationId,
           stage: { $in: ["review", "publish"] },
@@ -128,6 +133,25 @@ export async function githubWebhook(req, res) {
 
     if (!ACTIONS.has(payload.action) || pr.state !== "open" || pr.draft) {
       return res.sendStatus(200);
+    }
+    const connection = await GithubInstallation.findOne({
+      installationId,
+      enabled: true,
+    }).lean();
+
+    if (!connection) {
+      return res.status(200).json({
+        message: "Automatic reviews are not enabled for this installation.",
+      });
+    }
+
+    // This connection flow supports personally owned repositories.
+    if (
+      String(repository.owner?.id) !== connection.githubId
+    ) {
+      return res.status(200).json({
+        message: "Repository does not belong to the connected account.",
+      });
     }
 
     const identity = {

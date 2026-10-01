@@ -244,7 +244,11 @@ export async function processAutomaticReview(queueJob, lockToken) {
       now: Date.now(),
       expiresAt: document.expiresAt.getTime(),
       prepare: () => prepareReviewJob(document, token),
-      reviewBatch,
+      reviewBatch: files =>
+        reviewBatch(files, {
+          type: "installation",
+          id: String(document.installationId),
+        }),
     });
 
     const terminal = TERMINAL.has(outcome.state.status);
